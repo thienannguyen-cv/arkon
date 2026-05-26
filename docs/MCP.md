@@ -90,6 +90,49 @@ Or add it to `claude_desktop_config.json` manually:
 
 ---
 
+
+
+---
+
+## Security-hardening pattern: Internal MCP Gateway (credential entry in your own tool)
+
+Some organizations do not want third-party desktop/web clients to hold long-lived Arkon bearer tokens directly. In that model, users authenticate in an internal company-owned tool first, and that tool proxies MCP calls to Arkon.
+
+### When to use this pattern
+
+Use this pattern if you need one or more of:
+- Strict endpoint control (managed devices / VDI only)
+- Centralized DLP / content filtering before prompts leave your network
+- Emergency kill-switch at one choke point
+- Additional per-request policy checks beyond Arkon scope checks
+
+### Reference flow
+
+1. User signs in to your **internal gateway** (SSO/OIDC + MFA).
+2. Gateway resolves the user's Arkon identity mapping.
+3. Gateway calls Arkon MCP using a server-side credential strategy:
+   - per-user short-lived token, or
+   - service principal + explicit user-context headers/claims (if your policy allows).
+4. Gateway returns only the MCP tool result needed by the client.
+5. Gateway logs request/response metadata with a correlation id.
+
+### Security notes
+
+- This pattern **reduces token exposure in external clients**, but does not eliminate all risk.
+- Keep Arkon as the source of truth for wiki/source permission checks; do not bypass Arkon authorization logic.
+- Treat gateway logs as sensitive; never log `Authorization` headers or raw secrets.
+- Prefer short TTL credentials and fast revocation paths.
+
+### Minimal implementation checklist
+
+- [ ] Internal gateway enforces SSO + MFA.
+- [ ] Arkon tokens are stored encrypted at rest (or minted just-in-time).
+- [ ] Token rotation and revocation are automated.
+- [ ] `Authorization` headers are redacted in logs.
+- [ ] End-to-end audit trail links: `user -> gateway request id -> Arkon request`.
+
+This pattern is optional. If your threat model accepts direct OAuth from Claude Desktop / Claude.ai, you can use the default connection flow described above.
+
 ## Getting Claude to consistently use Arkon
 
 Claude doesn't always call MCP tools automatically. Two ways to improve this:
